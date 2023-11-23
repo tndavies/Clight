@@ -1,22 +1,37 @@
 #pragma once
 #include <colour.hpp>
 
-struct Token {
-	size_t idx;
-	size_t len;
-	Colour col;
+enum class TokenClass {
+	Keyword,
+	Identifier,
+	Seperator,
+	Operator,
+	String_Literal,
+	Numeric_Literal
 };
 
-class Tokenizer {
+struct Token {
+	TokenClass type;
+	size_t idx;
+	size_t len;
+
+	std::string ident;
+};
+
+class Lexer {
 
 public:
-	void parse(std::string text);
+	Lexer(const char* blob);
 
-	auto begin() { return m_Tokens.begin(); }
-	auto end() { return m_Tokens.end(); }
-
-	static void assign(Token& token);
+	bool next(Token& token);
 
 private:
-	std::vector<Token> m_Tokens;
+	bool IsOperator(uint8_t c);
+	bool IsDelimiter(uint8_t c);
+	bool IsWhiteSpace(uint8_t c);
+	void YieldToken(std::string& buffer, size_t blob_index, Token& token);
+
+private:
+	std::string m_Blob;
+	size_t m_Index = 0;
 };

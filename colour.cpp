@@ -13,7 +13,8 @@ void Palette::Init() {
 }
 
 std::string Palette::get(Colour col) {
-	return std::string(m_Colours[(size_t)col]);
+	auto index = static_cast<size_t>(col);
+	return std::string(m_Colours[index]);
 }
 
 std::vector<const char*> Palette::m_Colours;

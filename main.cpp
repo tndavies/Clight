@@ -5,29 +5,18 @@
 #include <colour.hpp>
 #include <tokens.hpp>
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) 
+{
+	std::string blob = "foo = my_function(abc+3.1415%2.156e30, \"my string\") abc";
+	std::cout << blob << "\n" << std::endl;
 
-	// Our blob of text to highlight.
-	const char* blob = "Lorem Ipsum is simply dummy text of the printing and typesetting industry.";
+	Lexer lexer(blob.c_str());
 
-	// Tokenize the blob of text, according to our ruleset.
-	Tokenizer tokenizer;
-	tokenizer.parse(blob);
-
-	// Assign colours to tokens.
-	for (auto& token : tokenizer) {
-		Tokenizer::assign(token);
-	}
-
-	// Print out tokens in their assigned colours.
-	Palette::Init();
-
-	for(const auto& token: tokenizer) {
-		std::string token_str(blob + token.idx, token.len);
-
-		std::cout << "\033" << Palette::get(token.col);
-		std::cout << token_str;
-		std::cout << "\033" << Palette::get(Colour::Default);
+	Token token;
+	while (lexer.next(token)) 
+	{
+		std::cout << blob.substr(token.idx, token.len) << "\n";
+		//std::cout << "\t(" << static_cast<int>(token.type) << ")" << std::endl;
 	}
 
 	return 0;
