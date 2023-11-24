@@ -1,98 +1,89 @@
 #include <tokens.hpp>
 #include <iostream>
 
-// foo = my_function(abc+3.1415**2.156e30, 103)
+// "foo  abc" 
 
-Lexer::Lexer(const char* blob) 
+bool Lexer::ConsumeInputStream(uint8_t& c)
 {
-	m_Blob = std::string(blob);
+	bool InputStreamRemaining = m_ReadIdx < m_Blob.length();
+	if (InputStreamRemaining)
+		c = m_Blob[m_ReadIdx++];
+
+	return InputStreamRemaining;
 }
 
-bool Lexer::next(Token& token) 
+bool Lexer::next_token(Token& token) 
 {
+	bool failed_to_find_token = false;
+	size_t token_origin = m_ReadIdx;
 	std::string buffer;
-	auto idx = m_Index;
 
-	while (idx < m_Blob.length())
+	uint8_t c = NULL;
+	bool InputStreamWasRead = NULL;
+	while (InputStreamWasRead = ConsumeInputStream(c))
 	{
-		uint8_t c = m_Blob[idx];
-		
-		if (IsWhiteSpace(c)) {
-			if (buffer.length()) {
-				YieldToken(buffer, m_Index, token);
-				m_Index = idx + 1;
-				break;
+		switch (ClassifyCharacter(c)) 
+		{
+			case InputStreamClass::Whitespace:
+			{
+				if (buffer.length()) {
+					MakeToken(buffer, token_origin, token);
+					goto yield_token;
+				}
+				else
+					return next_token(token);
 			}
-			else {
-				m_Index = idx + 1;
-				next(token);
-				break;
-			}
-			
-		}
-		else if (IsDelimiter(c)) {
-			if (!buffer.length()) {
-				buffer += c;
-				YieldToken(buffer, m_Index, token);
-				m_Index = idx + 1;
-				break;
-			}
+			break;
 
-			YieldToken(buffer, m_Index, token);
-			m_Index = idx;
+			case InputStreamClass::Delimiter:
+			case InputStreamClass::Operator:
+			{
+				if (buffer.length())
+					--m_ReadIdx; // stay on delimiter/operator for next token call.
+				else
+					buffer += c;
+
+				MakeToken(buffer, token_origin, token);
+				goto yield_token;
+			}
+			break;
+
+			case InputStreamClass::Symbol:
+			{
+				buffer += c;
+			}
 			break;
 		}
-		else if (IsOperator(c)) {
-			if (!buffer.length()) {
-				buffer += c;
-				YieldToken(buffer, m_Index, token);
-				m_Index = idx + 1;
-				break;
-			}
-		
-			YieldToken(buffer, m_Index, token);
-			m_Index = idx;
-			break;
-			
-		}
-
-		buffer += c;
-		++idx;
 	}
 
-	if (buffer.length()) {
-		YieldToken(buffer, m_Index, token);
-	}
+yield_token:
 
-	return idx < m_Blob.length();
+	if (!InputStreamWasRead && buffer.length())
+		MakeToken(buffer, token_origin, token);
+
+	return InputStreamWasRead;
 }
 
-void Lexer::YieldToken(std::string& buffer, size_t blob_index, Token& token)
+void Lexer::MakeToken(std::string& buffer, size_t blob_index, Token& token)
 {
 	token.idx = blob_index;
 	token.len = buffer.length();
 	token.ident = buffer;
-
 	buffer.clear();
 }
 
-bool Lexer::IsWhiteSpace(uint8_t c)
+InputStreamClass Lexer::ClassifyCharacter(uint8_t c)
 {
-	return c == ' ';
-}
-
-bool Lexer::IsOperator(uint8_t c)
-{
-	bool result = c == '=' ||c == '+' || c == '-' || c == '*' || 
-		c == '/' || c == '<' || c == '>' ||c == '^' || c == '%';
+	bool is_whitespace = (c == ' ');
 	
-	return result;
-}
-
-bool Lexer::IsDelimiter(uint8_t c)
-{
-	bool result = c == '(' || c == ')' || c == '{' || 
+	bool is_operator = c == '=' || c == '+' || c == '-' || c == '*' ||
+		c == '/' || c == '<' || c == '>' || c == '^' || c == '%';
+	
+	bool is_delimiter = c == '(' || c == ')' || c == '{' ||
 		c == '}' || c == ',';
-
-	return result;
+	
+	if (is_whitespace)		return InputStreamClass::Whitespace;
+	else if (is_operator)	return InputStreamClass::Operator;
+	else if (is_delimiter)	return InputStreamClass::Delimiter;
+	else					return InputStreamClass::Symbol;
 }

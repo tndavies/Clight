@@ -10,6 +10,13 @@ enum class TokenClass {
 	Numeric_Literal
 };
 
+enum class InputStreamClass {
+	Whitespace,
+	Delimiter,
+	Operator,
+	Symbol	// ie: letter, digit etc.
+};
+
 struct Token {
 	TokenClass type;
 	size_t idx;
@@ -21,17 +28,17 @@ struct Token {
 class Lexer {
 
 public:
-	Lexer(const char* blob);
+	Lexer(const char* blob)
+		: m_Blob(blob) {}
 
-	bool next(Token& token);
-
-private:
-	bool IsOperator(uint8_t c);
-	bool IsDelimiter(uint8_t c);
-	bool IsWhiteSpace(uint8_t c);
-	void YieldToken(std::string& buffer, size_t blob_index, Token& token);
+	bool next_token(Token& token);
 
 private:
-	std::string m_Blob;
-	size_t m_Index = 0;
+	InputStreamClass ClassifyCharacter(uint8_t c);
+	void MakeToken(std::string& buffer, size_t blob_index, Token& token);
+	bool ConsumeInputStream(uint8_t& c);
+
+private:
+	std::string m_Blob; // make const!
+	size_t m_ReadIdx = 0;
 };
