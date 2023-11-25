@@ -1,73 +1,60 @@
 #include <tokens.hpp>
 #include <iostream>
 
-
-bool Lexer::NextToken(Token& token) 
+Token Lexer::NextToken() 
 {
-	#define yield() goto yield_token
+	Token token = { .type = TokenClass::Invalid };
 	
-	// We have run out of input stream to lex.
-	if (m_ReadIdx == m_Blob.length()) 
-		return false;
-
-	bool inside_sliteral = false;
-	bool inside_nliteral = false;
-
-	size_t token_origin = m_ReadIdx;
-	std::string buffer;
-
-	uint8_t c = NULL;
+	std::size_t token_origin = m_ReadIdx;
 	bool InputStreamWasRead = NULL;
-	while (InputStreamWasRead = ConsumeInputStream(c))
+	std::string buffer;
+	uint8_t c = NULL;
+
+	while (token.type == TokenClass::Invalid &&
+		(InputStreamWasRead = ConsumeInputStream(c))) 
 	{
-		switch (ClassifyCharacter(c, inside_sliteral, inside_nliteral))
-		{
+		// handle string literals.
+		if (c == '\"') {
+			if (m_State == LexingMode::Default) {
+				if (buffer.length())
+					YieldToken(buffer, token_origin, token);
+				
+				m_State = LexingMode::String;
+				++token_origin; // ignore " in emitted token.
+			}
+			else if(m_State == LexingMode::String) {
+				m_State = LexingMode::Default;
+				YieldToken(buffer, token_origin, token);
+			}
+			
+			continue;
+		}
+
+		// handle number literals.
+
+		// build token.
+		switch(ClassifyCharacter(c)) {
 			case CharClass::Delimiter:
 			{
-				if (c == ' ') {
-					// If buffer is populated, emit token & and skip whitespace 
-					// ready for the next call to next_token; if buffer is empty, 
-					// find the next token after the whitespace, and return.
+				// whitespace
+				if (c == ' ' && buffer.length()) 
+					YieldToken(buffer, token_origin, token);
 
-					if (!buffer.length())
-						return NextToken(token);
-					else {
-						MakeToken(buffer, token_origin, token);
-						yield();
-					}
+				else if (c == ' ' && !buffer.length()) 
+					token = NextToken();
+
+				// non-whitespace
+				else if (c != ' ' && buffer.length()) {
+					YieldToken(buffer, token_origin, token);
+					m_ReadIdx--;
 				}
-				else { // not letter/number/whitespace
-					
-					// If buffer is populated, emit token & ensure we stay on the
-					// delimiter/operator for the next call to next_token;
-					// if buffer is empty, then emit delimiter/operator as token.
-
-					if (buffer.length()) --m_ReadIdx;
-					else buffer += c; 
-
-					MakeToken(buffer, token_origin, token);
-					yield();
+				else if (c != ' ' && !buffer.length()) {
+					buffer += c;
+					YieldToken(buffer, token_origin, token);
 				}
 			}
 			break;
 			
-			case CharClass::Quotation:
-			{
-				if (inside_sliteral) {
-					MakeToken(buffer, token_origin + 1, token);
-					yield();
-				}
-
-				inside_sliteral = !inside_sliteral;
-			}
-			break;
-
-			case CharClass::Numeral:
-			{
-				inside_nliteral = !inside_nliteral;
-			}
-			break;
-
 			case CharClass::Symbol:
 			{
 				buffer += c;
@@ -76,44 +63,42 @@ bool Lexer::NextToken(Token& token)
 		}
 	}
 
-yield_token:
-
+	// flush token buffer once the input stream  
+	// has been fully consumed.
 	if (!InputStreamWasRead && buffer.length())
-		MakeToken(buffer, token_origin, token);
+		YieldToken(buffer, token_origin, token);
 
-	return true;
+	return token;
 }
 
-void Lexer::MakeToken(std::string& buffer, size_t blob_index, Token& token)
+CharClass Lexer::ClassifyCharacter(uint8_t c)
+{
+	bool is_operator = c == '=' || c == '+' || c == '-' || c == '*' ||
+		c == '/' || c == '<' || c == '>' || c == '^' || c == '%';
+
+	bool is_delimiter = c == ' ' || c == '(' || c == ')' || c == '{' ||
+		c == '}' || c == ',' || c == '.';
+
+
+	if (is_delimiter || is_operator)
+		return (m_State == LexingMode::String) ? CharClass::Symbol : CharClass::Delimiter;
+	else
+		return CharClass::Symbol;
+}
+
+void Lexer::YieldToken(std::string& buffer, size_t blob_index, Token& token)
 {
 	token.idx = blob_index;
 	token.len = buffer.length();
 	token.ident = buffer;
+	token.type = TokenClass::Identifier;
 	buffer.clear();
-}
-
-CharClass Lexer::ClassifyCharacter(uint8_t c, bool in_sLiteral, bool in_nLiteral)
-{
-	bool is_operator = c == '=' || c == '+' || c == '-' || c == '*' ||
-		c == '/' || c == '<' || c == '>' || c == '^' || c == '%';
-	
-	bool is_auxchar = c == '(' || c == ')' || c == '{' ||
-		c == '}' || c == ',' || c == '.';
-	
-	if (c == ' ' || is_operator || is_auxchar)
-		return (!in_sLiteral) ? CharClass::Delimiter : CharClass::Symbol;
-	else if (c == '\"')
-		return CharClass::Quotation;
-	else if (std::isdigit(c))
-		return CharClass::Numeral;
-	else
-		return CharClass::Symbol;
-
 }
 
 bool Lexer::ConsumeInputStream(uint8_t& c)
 {
 	bool InputStreamRemaining = m_ReadIdx < m_Blob.length();
+	
 	if (InputStreamRemaining)
 		c = m_Blob[m_ReadIdx++];
 

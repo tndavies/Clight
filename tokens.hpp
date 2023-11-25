@@ -1,20 +1,27 @@
 #pragma once
-#include <colour.hpp>
+
+#include <string>
 
 enum class TokenClass {
+	Invalid,
 	Keyword,
 	Identifier,
 	Seperator,
 	Operator,
-	String_Literal,
-	Numeric_Literal
+	String,
+	Number
 };
 
 enum class CharClass {
+	Ignore,
 	Delimiter,
-	Quotation,
-	Numeral,
 	Symbol
+};
+
+enum class LexingMode {
+	Default,
+	String,
+	Number
 };
 
 struct Token {
@@ -23,22 +30,30 @@ struct Token {
 	size_t len;
 
 	std::string ident;
+
+	// Tokens convert to true if they are valid,
+	// and false if they are invalid.
+	operator bool() const { return (type != TokenClass::Invalid); }
 };
 
 class Lexer {
 
 public:
 	Lexer(const char* blob)
-		: m_Blob(blob) {}
+		: m_ReadIdx(0), m_Blob(blob),
+	m_State(LexingMode::Default){}
 
-	bool NextToken(Token& token);
+	[[nodiscard]] Token NextToken();
 
 private:
-	CharClass ClassifyCharacter(uint8_t c, bool in_sLiteral, bool in_nLiteral);
-	void MakeToken(std::string& buffer, size_t blob_index, Token& token);
+	CharClass ClassifyCharacter(uint8_t c);
+	
+	void YieldToken(std::string& buffer, size_t blob_index, Token& token);
+	
 	bool ConsumeInputStream(uint8_t& c);
-
+	
 private:
-	std::string m_Blob; // make const!
-	size_t m_ReadIdx = 0;
+	std::string m_Blob; // fix: we want to enusre you can't mutate this!!
+	size_t m_ReadIdx;
+	LexingMode m_State;
 };
