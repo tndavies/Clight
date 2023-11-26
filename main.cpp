@@ -7,7 +7,7 @@
 
 int main(int argc, char* argv[]) 
 {
-	std::string blob = "hello \"my.string\" world";
+	std::string blob = "3.1 efhjkefh \"4e12\" 3.123$100.2";
 	std::cout << blob << "\n" << std::endl;
 
 	Lexer lexer(blob.c_str());

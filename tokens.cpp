@@ -26,11 +26,30 @@ Token Lexer::NextToken()
 				m_State = LexingMode::Default;
 				YieldToken(buffer, token_origin, token);
 			}
-			
+			else if (m_State == LexingMode::Number) {
+				YieldToken(buffer, token_origin, token);
+				if (c != ' ') m_ReadIdx--;
+				
+				m_State = LexingMode::Default;
+			}
+
 			continue;
 		}
 
 		// handle number literals.
+		if (std::isdigit(c) && m_State == LexingMode::Default) {
+			m_State = LexingMode::Number;
+		}
+		else if (!std::isdigit(c) && !IsNumericSymbol(c) 
+			&& m_State == LexingMode::Number) 
+		{
+			YieldToken(buffer, token_origin, token);
+			if (c != ' ') m_ReadIdx--;
+
+			m_State = LexingMode::Default;
+
+			continue;
+		}
 
 		// build token.
 		switch(ClassifyCharacter(c)) {
@@ -55,10 +74,8 @@ Token Lexer::NextToken()
 			}
 			break;
 			
-			case CharClass::Symbol:
-			{
+			case CharClass::Symbol: 
 				buffer += c;
-			}
 			break;
 		}
 	}
@@ -71,23 +88,28 @@ Token Lexer::NextToken()
 	return token;
 }
 
-CharClass Lexer::ClassifyCharacter(uint8_t c)
-{
-	bool is_operator = c == '=' || c == '+' || c == '-' || c == '*' ||
-		c == '/' || c == '<' || c == '>' || c == '^' || c == '%';
+CharClass Lexer::ClassifyCharacter(uint8_t c) {	
+	switch (m_State) {
+		case LexingMode::Default:
+			return (std::ispunct(c) || c == ' ') ? CharClass::Delimiter : CharClass::Symbol;
+		break;
 
-	bool is_delimiter = c == ' ' || c == '(' || c == ')' || c == '{' ||
-		c == '}' || c == ',' || c == '.';
+		case LexingMode::Number:
+			if (std::isdigit(c) || IsNumericSymbol(c)) return CharClass::Symbol;
+			else return CharClass::Delimiter;
+		break;
 
-
-	if (is_delimiter || is_operator)
-		return (m_State == LexingMode::String) ? CharClass::Symbol : CharClass::Delimiter;
-	else
-		return CharClass::Symbol;
+		case LexingMode::String:
+			return CharClass::Symbol;
+		break;
+	}
 }
 
-void Lexer::YieldToken(std::string& buffer, size_t blob_index, Token& token)
-{
+bool Lexer::IsNumericSymbol(std::uint8_t c) {
+	return c == '.' || c == 'e';
+}
+
+void Lexer::YieldToken(std::string& buffer, size_t blob_index, Token& token) {
 	token.idx = blob_index;
 	token.len = buffer.length();
 	token.ident = buffer;
@@ -95,8 +117,7 @@ void Lexer::YieldToken(std::string& buffer, size_t blob_index, Token& token)
 	buffer.clear();
 }
 
-bool Lexer::ConsumeInputStream(uint8_t& c)
-{
+bool Lexer::ConsumeInputStream(uint8_t& c) {
 	bool InputStreamRemaining = m_ReadIdx < m_Blob.length();
 	
 	if (InputStreamRemaining)

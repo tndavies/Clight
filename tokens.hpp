@@ -51,7 +51,9 @@ private:
 	void YieldToken(std::string& buffer, size_t blob_index, Token& token);
 	
 	bool ConsumeInputStream(uint8_t& c);
-	
+
+	bool IsNumericSymbol(std::uint8_t c);
+
 private:
 	std::string m_Blob; // fix: we want to enusre you can't mutate this!!
 	size_t m_ReadIdx;
