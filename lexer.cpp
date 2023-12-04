@@ -123,17 +123,17 @@ bool Lexer::IsDelimiter(uint8_t c) {
 		return true;
 
 	switch (m_State) {
-	case LexMode::Default:
-		return (std::ispunct(c) || c == ' ');
-		break;
+		case LexMode::Default:
+			return (std::ispunct(c) || c == ' ');
+			break;
 
-	case LexMode::Number:
-		return !(std::isdigit(c) || IsNumericSymbol(c));
-		break;
+		case LexMode::Number:
+			return !(std::isdigit(c) || IsNumericSymbol(c));
+			break;
 
-	case LexMode::String:
-		return false;
-		break;
+		case LexMode::String:
+			return false;
+			break;
 	}
 }
 
