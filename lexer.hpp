@@ -8,7 +8,7 @@
 enum class LexMode {
 	Default,
 	String,
-	Number
+	Numeric
 };
 
 enum class TokenType {
@@ -18,7 +18,8 @@ enum class TokenType {
 	Operator,
 	Seperator,
 	String_Literal,
-	Number_Literal
+	Number_Literal,
+	Comment
 };
 
 struct Token {
@@ -36,20 +37,29 @@ class Lexer {
 private:
 	const std::string m_Blob;
 	size_t m_ReadIdx;
-	LexMode m_State;
+	LexMode m_Mode;
 
-	void YieldToken(std::string& buffer, size_t origin, TokenType type, Token& token);
-	bool ConsumeInputStream(uint8_t& c);
+	void DefaultLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len, 
+		std::uint8_t& StringLiteralPrefix, bool& lexing_comment);
+
+	void StringLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
+		std::uint8_t& StringLiteralPrefix, bool& lexing_comment);
+
+	void NumericLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
+		std::uint8_t& StringLiteralPrefix, bool& lexing_comment);
+
+	bool ConsumeFromInputStream(std::uint8_t& c);
+	
 	bool IsNumericSymbol(std::uint8_t c);
-	TokenType InferTokenType(const std::string& token);
-
-	bool IsDelimiter(uint8_t c);
-	bool IsOperator(std::uint8_t c);
-	bool IsVirtualDelimiter(std::uint8_t c);
+	
+	TokenType InferTokenType(const std::size_t origin, const std::size_t len);
+	
+	void YieldToken(const std::size_t origin, const std::size_t len,
+		Token& token, TokenType type = TokenType::Invalid);
 
 public:
 	Lexer(const char* blob)
-		: m_ReadIdx(0), m_Blob(blob), m_State(LexMode::Default) 
+		: m_ReadIdx(0), m_Blob(blob), m_Mode(LexMode::Default) 
 	{}
 
 	[[nodiscard]] Token NextToken();

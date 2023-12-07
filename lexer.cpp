@@ -2,150 +2,156 @@
 #include <iostream>
 
 /* todo list of features
-
-	1) Handle character literals, ie: 'A', '\n' etc.
-	2) Handle newline feeds properly
 	3) single/multiline comments
 	4) keywords
 */
 
-Token Lexer::NextToken() 
+bool IsOperator(const std::uint8_t c) {
+	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '=';
+}
+
+void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c, 
+	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix,
+	bool& lexing_comment)
 {
+	if (std::isspace(c)) {
+		if (len) YieldToken(origin, len, token);
+		else token = NextToken();
+	}
+	else if (c == '\"' || c == '\'') {
+		if (len) {
+			YieldToken(origin, len, token);
+			RewindInputStream();
+		}
+		else {
+			m_Mode = LexMode::String;
+			StringLiteralPrefix = c;
+			len++;
+		}
+	}
+	else if (c == '#') { 
+		if (len) {
+			YieldToken(origin, len, token);
+			RewindInputStream();
+		}
+		else {
+			m_Mode = LexMode::String;
+			lexing_comment = true;
+			len++;
+		}
+	}
+	else if (std::ispunct(c)) {
+		if (len) {
+			YieldToken(origin, len, token);
+			RewindInputStream();
+		}
+		else {
+			auto type = IsOperator(c) ? TokenType::Operator : TokenType::Seperator;
+			YieldToken(origin, 1, token, type);
+		}
+	}
+	else if (std::isdigit(c) && !len) {
+		m_Mode = LexMode::Numeric;
+		len++;
+	}
+	else if (c == EndOfInputStream && len) {
+		YieldToken(origin, len, token);
+	}
+	else {
+		len++;
+	}
+}
+
+void Lexer::StringLexingPath(Token& token, const std::uint8_t c,
+	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix,
+	bool& lexing_comment)
+{
+	len++;
+
+	if (!lexing_comment && c == StringLiteralPrefix || c == EndOfInputStream) {
+		YieldToken(origin, len, token, TokenType::String_Literal);
+		m_Mode = LexMode::Default;
+	}
+	else if (lexing_comment && c == '\n' || c == EndOfInputStream) {
+		YieldToken(origin, len - 1, token, TokenType::Comment);
+		m_Mode = LexMode::Default;
+	}
+}
+
+void Lexer::NumericLexingPath(Token& token, const std::uint8_t c,
+	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix,
+	bool& lexing_comment)
+{
+	if (!IsNumericSymbol(c)) {
+		YieldToken(origin, len, token, TokenType::Number_Literal);
+		m_Mode = LexMode::Default;
+		RewindInputStream();
+	}
+	else {
+		len++;
+	}
+}
+
+Token Lexer::NextToken() {
 	Token token = { .type = TokenType::Invalid };
-	
-	std::size_t token_origin = m_ReadIdx;
-	bool InputStreamWasRead = NULL;
-	std::string buffer;
-	uint8_t c = NULL;
+	std::size_t origin = m_ReadIdx;
+	std::size_t len = 0;
 
-	while (token.type == TokenType::Invalid &&
-		(InputStreamWasRead = ConsumeInputStream(c))) 
+	bool lexing_comment = false;
+	std::uint8_t StringLiteralPrefix = NULL;
+	bool InputStreamWasRead = false;
+	std::uint8_t c = NULL;
+
+	while (token.type == TokenType::Invalid && 
+		(InputStreamWasRead = ConsumeFromInputStream(c)) )
 	{
-		// handle string literals.
-		if (c == '\"') {
-			if (m_State == LexMode::Default) {
-				if (buffer.length()) {
-					auto type = InferTokenType(buffer);
-					YieldToken(buffer, token_origin, type, token);
-				}
-				
-				m_State = LexMode::String;
-				++token_origin; // ignore " in emitted token.
-			}
-			else {
-				if (m_State == LexMode::Number && c != ' ')
-					RewindInputStream();
+		if (c == '\r') continue;
 
-				YieldToken(buffer, token_origin, TokenType::String_Literal, token);
-				m_State = LexMode::Default;
-			}
+		switch (m_Mode) {
+			case LexMode::Default:
+				DefaultLexingPath(token, c, origin, len, StringLiteralPrefix, lexing_comment);
+				break;
 
-			continue;
+			case LexMode::String:
+				StringLexingPath(token, c, origin, len, StringLiteralPrefix, lexing_comment);
+				break;
+
+			case LexMode::Numeric:
+				NumericLexingPath(token, c, origin, len, StringLiteralPrefix, lexing_comment);
+				break;
 		}
-
-		// handle number literals.
-		if (std::isdigit(c) && m_State == LexMode::Default) {
-			if (buffer.length()) {
-				auto type = InferTokenType(buffer);
-				YieldToken(buffer, token_origin, type, token);
-				RewindInputStream();
-			}
-
-			m_State = LexMode::Number;
-		}
-		else if (!std::isdigit(c) && !IsNumericSymbol(c) 
-			&& m_State == LexMode::Number) 
-		{
-			YieldToken(buffer, token_origin, TokenType::Number_Literal, token);
-			if (!IsVirtualDelimiter(c)) RewindInputStream();
-
-			m_State = LexMode::Default;
-
-			continue;
-		}
-
-		// build token.
-		if(IsDelimiter(c)) {
-				if (IsVirtualDelimiter(c) && buffer.length()) { 
-					// flush buffer
-					auto type = InferTokenType(buffer);
-					YieldToken(buffer, token_origin, type, token);
-				}
-				else if (IsVirtualDelimiter(c) && !buffer.length()) { 
-					// process virtual delimiter
-					token = NextToken();
-				}
-				else if (c != ' ' && buffer.length()) { 
-					// flush buffer
-					auto type = InferTokenType(buffer);
-					YieldToken(buffer, token_origin, type, token);
-					RewindInputStream();
-				}
-				else if (c != ' ' && !buffer.length()) { 
-					// process physical delimiter
-					buffer += c;
-					YieldToken(buffer, token_origin, TokenType::Seperator, token);
-				}
-		} 
-		else buffer += c;
-
 	}
 
 	return token;
 }
 
-TokenType Lexer::InferTokenType(const std::string& token) {
-	if (token.length() == 1 && IsOperator(token[0]))
-		return TokenType::Operator;
-	else
-		return TokenType::Identifier;
+TokenType Lexer::InferTokenType(const std::size_t origin, const std::size_t len) {
+	return TokenType::Identifier;
 }
 
-void Lexer::YieldToken(std::string& buffer, size_t origin, TokenType type, Token& token) {
+void Lexer::YieldToken(const std::size_t origin, const std::size_t len,
+	Token& token, TokenType type) 
+{
+	token.type = (type == TokenType::Invalid) ? InferTokenType(origin, len) : type;
 	token.idx = origin;
-	token.len = buffer.length();
-	token.type = type;
-
-	buffer.clear();
+	token.len = len;
 }
 
-bool Lexer::ConsumeInputStream(uint8_t& c) {
-	bool InputStreamRemaining = m_ReadIdx <= m_Blob.length();
-	
-	c = (InputStreamRemaining) ? m_Blob[m_ReadIdx] : EndOfInputStream;
-	m_ReadIdx++;
-
-	return InputStreamRemaining;
-}
-
-bool Lexer::IsDelimiter(uint8_t c) {
-	if (c == EndOfInputStream)
+bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {
+	if (m_ReadIdx < m_Blob.length()) {
+		c = m_Blob[m_ReadIdx++];
 		return true;
-
-	switch (m_State) {
-		case LexMode::Default:
-			return (std::ispunct(c) || c == ' ');
-			break;
-
-		case LexMode::Number:
-			return !(std::isdigit(c) || IsNumericSymbol(c));
-			break;
-
-		case LexMode::String:
-			return false;
-			break;
+	}
+	else if(m_ReadIdx == m_Blob.length()) {
+		c = EndOfInputStream;
+		m_ReadIdx++;
+		return true;
+	}
+	else {
+		return false;
 	}
 }
 
-bool Lexer::IsOperator(std::uint8_t c) {
-	return (c == '+' || c == '-' || c == '*' || c == '/' ||
-		c == '^' || c == '%');
-}
-
-bool Lexer::IsVirtualDelimiter(std::uint8_t c) {
-	return (c == ' ' || c == EndOfInputStream);
-}
-
 bool Lexer::IsNumericSymbol(std::uint8_t c) {
-	return c == '.' || c == 'e';
+	return std::isdigit(c) || c == '.' || c == 'e' || c == '-';
 }

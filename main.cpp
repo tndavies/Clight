@@ -18,29 +18,30 @@ void PrintError(const std::string err_msg) {
 	std::cout << Palette::get(Colour::Default);
 }
 
-const std::unordered_map<TokenType, Colour> ColourSet =
-{
+const std::unordered_map<TokenType, Colour> ColourMap = {
 	{TokenType::Identifier,		Colour::Default},
 	{TokenType::Operator,		Colour::Yellow},
 	{TokenType::Seperator,		Colour::Blue},
 	{TokenType::String_Literal, Colour::Green},
-	{TokenType::Number_Literal, Colour::Magenta}
+	{TokenType::Number_Literal, Colour::Magenta},
+	{TokenType::Comment,		Colour::Red}
 };
 
 void Highlight(const std::string& blob) {
-	size_t rhead = 0;
 	Lexer lexer(blob.c_str());
 
+	size_t prev_token_end = 0;
 	while (auto token = lexer.NextToken()) {
-		if (rhead != token.idx) {
-			size_t delta = token.idx - rhead;
-			for (size_t k = 0; k < delta; ++k)
-				std::cout << ' ';
+
+		if (prev_token_end != token.idx) {
+			for (size_t k = prev_token_end; k < token.idx; ++k) {
+				std::cout << blob[k];
+			}
 		}
 
-		rhead = token.idx + token.len;
+		prev_token_end = token.idx + token.len;
 
-		auto col = ColourSet.at(token.type);
+		auto col = ColourMap.at(token.type);
 		std::cout << Palette::get(col);
 		std::cout << blob.substr(token.idx, token.len);
 		std::cout << Palette::get(Colour::Default);
