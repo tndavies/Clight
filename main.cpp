@@ -20,6 +20,7 @@ void PrintError(const std::string err_msg) {
 
 const std::unordered_map<TokenType, Colour> ColourMap = {
 	{TokenType::Identifier,		Colour::Default},
+	{TokenType::Keyword,		Colour::Yellow},
 	{TokenType::Operator,		Colour::Yellow},
 	{TokenType::Seperator,		Colour::Blue},
 	{TokenType::String_Literal, Colour::Green},

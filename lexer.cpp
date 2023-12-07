@@ -2,8 +2,9 @@
 #include <iostream>
 
 /* todo list of features
-	3) single/multiline comments
-	4) keywords
+	1) multiline comments
+	2) don't consider '_' a seperator so things like foo_bar is one token,
+	 and not three.
 */
 
 bool IsOperator(const std::uint8_t c) {
@@ -125,16 +126,45 @@ Token Lexer::NextToken() {
 	return token;
 }
 
-TokenType Lexer::InferTokenType(const std::size_t origin, const std::size_t len) {
-	return TokenType::Identifier;
+const char* Keywords[] =
+{
+	"def",
+	"while",
+	"for",
+	"if",
+	"else",
+	"elif",
+	"break",
+	"return",
+	"import"
+};
+
+bool Lexer::MatchKeyword(const std::size_t origin, const std::size_t len) {
+	std::string token = m_Blob.substr(origin, len);
+	bool is_keyword = false;
+
+	for (auto kw : Keywords) {
+		if (token.compare(kw) == 0) {
+			is_keyword = true;
+			break;
+		}
+	}
+
+	return is_keyword;
 }
 
 void Lexer::YieldToken(const std::size_t origin, const std::size_t len,
 	Token& token, TokenType type) 
 {
-	token.type = (type == TokenType::Invalid) ? InferTokenType(origin, len) : type;
 	token.idx = origin;
 	token.len = len;
+
+	if (type == TokenType::Invalid) {
+		token.type = MatchKeyword(origin, len) ? TokenType::Keyword : TokenType::Identifier;
+	}
+	else {
+		token.type = type;
+	}
 }
 
 bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {

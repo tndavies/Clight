@@ -52,7 +52,7 @@ private:
 	
 	bool IsNumericSymbol(std::uint8_t c);
 	
-	TokenType InferTokenType(const std::size_t origin, const std::size_t len);
+	bool MatchKeyword(const std::size_t origin, const std::size_t len);
 	
 	void YieldToken(const std::size_t origin, const std::size_t len,
 		Token& token, TokenType type = TokenType::Invalid);
