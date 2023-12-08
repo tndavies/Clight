@@ -3,7 +3,7 @@
 
 // @feature: add support for preprocessor directives 
 // @feature: add support for single-line & multi-line comments.
-// @fix: '\\'
+// @fix: inproper string literal escaping, e.g: '\\' etc.
 
 const char* Preprocessor_Keywords[] = {
 	"#define", "#elif", "#else",
@@ -13,22 +13,32 @@ const char* Preprocessor_Keywords[] = {
 	"#undef", "#using"
 };
 
+const char* DataType_Keywords[] = {
+	"auto", "bool", "char", "size_t",
+	"uint8_t", "uint16_t", "uint32_t",
+	"int8_t", "int16_t", "int32_t",
+	"double", "float", "enum", 
+	"int", "long", "short", "signed",
+	"unsigned", "signed", "void",
+	"wchar_t"
+};
+
 const char* Language_Keywords[] = {
 	"alignas", "alignof", "and", "and_eq", "asm",
-	"atomic_cancel", "atomic_commit", "atomic_noexcept", "auto",
-	"bitand", "bitor", "bool", "break", "case", "catch", "char",
-	"char8_t", "char16_t", "char32_t", "class", "compl", "concept",
+	"atomic_cancel", "atomic_commit", "atomic_noexcept",
+	"bitand", "bitor", "break", "case", "catch",
+	"class", "compl", "concept",
 	"const", "consteval", "constexpr", "constinit", "const_cast",
 	"continue", "co_await", "co_return", "co_yield", "decltype",
-	"default", "delete", "do", "double", "dynamic_cast", "else",
-	"enum", "explicit", "export", "extern", "false", "float", "for",
-	"friend", "goto", "if", "inline", "int", "long", "mutable", "namespace",
+	"default", "delete", "do", "dynamic_cast", "else",
+	"explicit", "export", "extern", "false", "for",
+	"friend", "goto", "if", "inline", "mutable", "namespace",
 	"new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq",
 	"private", "protected", "public", "reflexpr", "register", "reinterpret_cast",
-	"requires", "return", "short", "signed", "sizeof", "static", "static_assert",
+	"requires", "return", "sizeof", "static", "static_assert",
 	"static_cast", "struct", "switch", "synchronized", "template", "this",
 	"thread_local", "throw", "true", "try", "typedef", "typeid", "typename",
-	"union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t",
+	"union", "using", "virtual", "volatile",
 	"while", "xor", "xor_eq"
 };
 
@@ -158,22 +168,22 @@ Token Lexer::NextToken() {
 	return token;
 }
 
-bool Lexer::MatchKeyword(const std::size_t origin, const std::size_t len) {
+TokenType Lexer::MatchKeyword(const std::size_t origin, const std::size_t len) {
 	std::string token = m_Blob.substr(origin, len);
 
 	for (auto kw : Language_Keywords) {
 		if (token.compare(kw) == 0) {
-			return true;
+			return TokenType::Keyword;
 		}
 	}
 
-	for (auto kw : Preprocessor_Keywords) {
+	for (auto kw : DataType_Keywords) {
 		if (token.compare(kw) == 0) {
-			return true;
+			return TokenType::Datatype;
 		}
 	}
 
-	return false; // token didn't match any language/preprocessor keyword.
+	return TokenType::Identifier;
 }
 
 void Lexer::YieldToken(const std::size_t origin, const std::size_t len,
@@ -181,13 +191,7 @@ void Lexer::YieldToken(const std::size_t origin, const std::size_t len,
 {
 	token.idx = origin;
 	token.len = len;
-
-	if (type == TokenType::Invalid) {
-		token.type = MatchKeyword(origin, len) ? TokenType::Keyword : TokenType::Identifier;
-	}
-	else {
-		token.type = type;
-	}
+	token.type = (type == TokenType::Invalid) ? MatchKeyword(origin, len) : type;
 }
 
 bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {
@@ -210,5 +214,5 @@ bool Lexer::IsNumericSymbol(std::uint8_t c) {
 }
 
 bool Lexer::IsOperator(const std::uint8_t c) {
-	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '=';
+	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '=' || c == '!';
 }

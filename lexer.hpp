@@ -14,6 +14,7 @@ enum class LexMode {
 enum class TokenType {
 	Invalid,
 	Keyword,
+	Datatype,
 	Identifier,
 	Operator,
 	Seperator,
@@ -54,7 +55,7 @@ private:
 	
 	bool IsNumericSymbol(std::uint8_t c);
 	
-	bool MatchKeyword(const std::size_t origin, const std::size_t len);
+	TokenType MatchKeyword(const std::size_t origin, const std::size_t len);
 	
 	void YieldToken(const std::size_t origin, const std::size_t len,
 		Token& token, TokenType type = TokenType::Invalid);
