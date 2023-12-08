@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <chrono>
 
 #include <colour.hpp>
 #include <lexer.hpp>
@@ -32,8 +33,13 @@ void Highlight(const std::string& blob) {
 	Lexer lexer(blob.c_str());
 
 	size_t prev_token_end = 0;
-	while (auto token = lexer.NextToken()) {
+	const std::vector<Token>& tokens = lexer.getTokens();
 
+	std::cout << Palette::get(Colour::Red);
+	std::cout << "Performance: " << lexer.getElapsedTime() << "\n\n";
+	std::cout << Palette::get(Colour::Default);
+
+	for (auto& token : tokens) {
 		if (prev_token_end != token.idx) {
 			for (size_t k = prev_token_end; k < token.idx; ++k) {
 				std::cout << blob[k];
@@ -47,8 +53,6 @@ void Highlight(const std::string& blob) {
 		std::cout << blob.substr(token.idx, token.len);
 		std::cout << Palette::get(Colour::Default);
 	}
-
-	std::cout << '\n';
 }
 
 int main(int argc, char* argv[]) 

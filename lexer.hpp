@@ -1,6 +1,6 @@
 #pragma once
-
 #include <string>
+#include <chrono>
 
 #define RewindInputStream() (m_ReadIdx--)
 #define EndOfInputStream	0x00
@@ -35,8 +35,10 @@ struct Token {
 class Lexer {
 
 private:
+	std::chrono::microseconds m_ElapsedTime;
+	std::vector<Token> m_Tokens;
 	const std::string m_Blob;
-	size_t m_ReadIdx;
+	std::size_t m_ReadIdx;
 	LexMode m_Mode;
 
 	void DefaultLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len, 
@@ -57,10 +59,13 @@ private:
 	void YieldToken(const std::size_t origin, const std::size_t len,
 		Token& token, TokenType type = TokenType::Invalid);
 
-public:
-	Lexer(const char* blob)
-		: m_ReadIdx(0), m_Blob(blob), m_Mode(LexMode::Default) 
-	{}
+	bool IsOperator(const std::uint8_t c);
 
 	[[nodiscard]] Token NextToken();
+public:
+	Lexer(const char* blob, bool defer_lex = false);
+	auto getElapsedTime() const { return m_ElapsedTime; }
+	auto getBlobSize() const { return m_Blob.length(); }
+	const std::vector<Token>& getTokens() const { return m_Tokens; }
+	void LexBlob();
 };

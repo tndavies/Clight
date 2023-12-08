@@ -1,14 +1,54 @@
 #include <lexer.hpp>
 #include <iostream>
 
-/* todo list of features
-	1) multiline comments
-	2) don't consider '_' a seperator so things like foo_bar is one token,
-	 and not three.
-*/
+// @feature: add support for preprocessor directives 
+// @feature: add support for single-line & multi-line comments.
+// @fix: '\\'
 
-bool IsOperator(const std::uint8_t c) {
-	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '=';
+const char* Preprocessor_Keywords[] = {
+	"#define", "#elif", "#else",
+	"#endif", "#error", "#if",
+	"#ifdef", "#ifndef", "#import",
+	"#include", "#line", "#pragma",
+	"#undef", "#using"
+};
+
+const char* Language_Keywords[] = {
+	"alignas", "alignof", "and", "and_eq", "asm",
+	"atomic_cancel", "atomic_commit", "atomic_noexcept", "auto",
+	"bitand", "bitor", "bool", "break", "case", "catch", "char",
+	"char8_t", "char16_t", "char32_t", "class", "compl", "concept",
+	"const", "consteval", "constexpr", "constinit", "const_cast",
+	"continue", "co_await", "co_return", "co_yield", "decltype",
+	"default", "delete", "do", "double", "dynamic_cast", "else",
+	"enum", "explicit", "export", "extern", "false", "float", "for",
+	"friend", "goto", "if", "inline", "int", "long", "mutable", "namespace",
+	"new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq",
+	"private", "protected", "public", "reflexpr", "register", "reinterpret_cast",
+	"requires", "return", "short", "signed", "sizeof", "static", "static_assert",
+	"static_cast", "struct", "switch", "synchronized", "template", "this",
+	"thread_local", "throw", "true", "try", "typedef", "typeid", "typename",
+	"union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t",
+	"while", "xor", "xor_eq"
+};
+
+Lexer::Lexer(const char* blob, bool defer_lex)
+	: m_ReadIdx(0), m_Blob(blob), m_Mode(LexMode::Default) , m_ElapsedTime(0)
+{
+	if(!defer_lex) 
+		LexBlob();
+}
+
+void Lexer::LexBlob() {
+	auto t0 = std::chrono::steady_clock::now();
+
+	Token token;
+	while (token = NextToken()) {
+		m_Tokens.push_back(token);
+	}
+
+	auto t1 = std::chrono::steady_clock::now();
+	m_ElapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
 }
 
 void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c, 
@@ -30,18 +70,7 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 			len++;
 		}
 	}
-	else if (c == '#') { 
-		if (len) {
-			YieldToken(origin, len, token);
-			RewindInputStream();
-		}
-		else {
-			m_Mode = LexMode::String;
-			lexing_comment = true;
-			len++;
-		}
-	}
-	else if (std::ispunct(c)) {
+	else if (std::ispunct(c) && c != '_') {
 		if (len) {
 			YieldToken(origin, len, token);
 			RewindInputStream();
@@ -69,7 +98,10 @@ void Lexer::StringLexingPath(Token& token, const std::uint8_t c,
 {
 	len++;
 
-	if (!lexing_comment && c == StringLiteralPrefix || c == EndOfInputStream) {
+	auto c_prev = m_Blob[m_ReadIdx - 2];
+	if (!lexing_comment && c == EndOfInputStream || 
+		c == StringLiteralPrefix && c_prev != '\\') 
+	{
 		YieldToken(origin, len, token, TokenType::String_Literal);
 		m_Mode = LexMode::Default;
 	}
@@ -126,31 +158,22 @@ Token Lexer::NextToken() {
 	return token;
 }
 
-const char* Keywords[] =
-{
-	"def",
-	"while",
-	"for",
-	"if",
-	"else",
-	"elif",
-	"break",
-	"return",
-	"import"
-};
-
 bool Lexer::MatchKeyword(const std::size_t origin, const std::size_t len) {
 	std::string token = m_Blob.substr(origin, len);
-	bool is_keyword = false;
 
-	for (auto kw : Keywords) {
+	for (auto kw : Language_Keywords) {
 		if (token.compare(kw) == 0) {
-			is_keyword = true;
-			break;
+			return true;
 		}
 	}
 
-	return is_keyword;
+	for (auto kw : Preprocessor_Keywords) {
+		if (token.compare(kw) == 0) {
+			return true;
+		}
+	}
+
+	return false; // token didn't match any language/preprocessor keyword.
 }
 
 void Lexer::YieldToken(const std::size_t origin, const std::size_t len,
@@ -184,4 +207,8 @@ bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {
 
 bool Lexer::IsNumericSymbol(std::uint8_t c) {
 	return std::isdigit(c) || c == '.' || c == 'e' || c == '-';
+}
+
+bool Lexer::IsOperator(const std::uint8_t c) {
+	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '=';
 }
