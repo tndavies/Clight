@@ -1,7 +1,7 @@
 #include <lexer.hpp>
 #include <iostream>
 
-// @add: support for single-line & multi-line comments.
+// @fix: nexted multiline comments are broken.
 
 const char* Preprocessor_Keywords[] = {
 	"#define", "#elif", "#else",
@@ -60,8 +60,7 @@ void Lexer::LexBlob() {
 }
 
 void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c, 
-	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator,
-	bool& preprocessor_directive)
+	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator)
 {
 	bool last_token_was_preproc = m_Tokens.size() ? (m_Tokens.back().type == TokenType::Preprocessor) : false; 
 	
@@ -71,6 +70,16 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 	}
 	else if(c == '#') {
 		m_Mode = LexMode::Preprocessor_Directive;
+		len++;
+	}
+	// @note: EndOfInputStream prevents possible read access violation here.
+	else if(c == '/' && m_Blob[m_ReadIdx] == '/') {
+		m_Mode = LexMode::SingleLineComment;
+		len++;
+	}
+	// @note: EndOfInputStream prevents possible read access violation here.
+	else if(c == '/' && m_Blob[m_ReadIdx] == '*') {
+		m_Mode = LexMode::MultiLineComment;
 		len++;
 	}
 	else if (c == '\'' || c == '\"' || (last_token_was_preproc && c == '<')) {
@@ -166,7 +175,6 @@ Token Lexer::NextToken() {
 	std::size_t len = 0;
 
 	std::size_t backslash_count = 0;
-	bool preprocessor_directive = false;
 	std::uint8_t sliteral_terminator = NULL;
 	
 	std::uint8_t c = NULL;
@@ -179,7 +187,7 @@ Token Lexer::NextToken() {
 
 		switch (m_Mode) {
 			case LexMode::Default:
-				DefaultLexingPath(token, c, origin, len, sliteral_terminator, preprocessor_directive);
+				DefaultLexingPath(token, c, origin, len, sliteral_terminator);
 				break;
 
 			case LexMode::String_Literal:
@@ -192,6 +200,28 @@ Token Lexer::NextToken() {
 				
 			case LexMode::Preprocessor_Directive:
 				LexPreprocessorDirective(token, c, origin, len, sliteral_terminator);
+				break;
+				
+			case LexMode::SingleLineComment:
+				len++;
+				
+				if(c == EndOfInputStream || c == '\n') {
+					YieldToken(origin, len - 1, token, TokenType::Comment);
+					m_Mode = LexMode::Default;
+				}
+				
+				break;
+				
+			case LexMode::MultiLineComment:
+				len++;
+				
+				// @note: there is no risk of an access violation here, as we
+				// require a /* to appear in the blob first, before we run
+				// this codepath.
+				if(c == EndOfInputStream || c == '/' && m_Blob[m_ReadIdx-2] == '*') {
+					YieldToken(origin, len, token, TokenType::Comment);
+					m_Mode = LexMode::Default;
+				}
 				
 				break;
 		}

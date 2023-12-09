@@ -10,6 +10,8 @@ enum class LexMode {
 	String_Literal,
 	Number_Literal,
 	Preprocessor_Directive,
+	SingleLineComment,
+	MultiLineComment
 };
 
 enum class TokenType {
@@ -46,7 +48,7 @@ private:
 	LexMode m_Mode;
 
 	void DefaultLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len, 
-		std::uint8_t& sliteral_terminator, bool& preprocessor_directive);
+		std::uint8_t& sliteral_terminator);
 
 	void LexStringLiteral(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
 		std::uint8_t& sliteral_terminator, std::size_t& backslash_count);
