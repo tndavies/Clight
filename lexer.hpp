@@ -43,13 +43,13 @@ private:
 	LexMode m_Mode;
 
 	void DefaultLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len, 
-		std::uint8_t& StringLiteralPrefix, bool& lexing_comment);
+		std::uint8_t& StringLiteralPrefix);
 
 	void StringLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
-		std::uint8_t& StringLiteralPrefix, bool& lexing_comment);
+		std::uint8_t& StringLiteralPrefix, std::size_t& backslash_count);
 
 	void NumericLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
-		std::uint8_t& StringLiteralPrefix, bool& lexing_comment);
+		std::uint8_t& StringLiteralPrefix);
 
 	bool ConsumeFromInputStream(std::uint8_t& c);
 	

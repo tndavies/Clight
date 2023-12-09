@@ -3,7 +3,6 @@
 
 // @feature: add support for preprocessor directives 
 // @feature: add support for single-line & multi-line comments.
-// @fix: inproper string literal escaping, e.g: '\\' etc.
 
 const char* Preprocessor_Keywords[] = {
 	"#define", "#elif", "#else",
@@ -62,8 +61,7 @@ void Lexer::LexBlob() {
 }
 
 void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c, 
-	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix,
-	bool& lexing_comment)
+	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix)
 {
 	if (std::isspace(c)) {
 		if (len) YieldToken(origin, len, token);
@@ -103,27 +101,35 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 }
 
 void Lexer::StringLexingPath(Token& token, const std::uint8_t c,
-	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix,
-	bool& lexing_comment)
+	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator,
+	std::size_t& backslash_count)
 {
 	len++;
-
-	auto c_prev = m_Blob[m_ReadIdx - 2];
-	if (!lexing_comment && c == EndOfInputStream || 
-		c == StringLiteralPrefix && c_prev != '\\') 
-	{
-		YieldToken(origin, len, token, TokenType::String_Literal);
+	
+	if(c == EndOfInputStream) {
+		YieldToken(origin, len - 1, token, TokenType::String_Literal);
 		m_Mode = LexMode::Default;
+		return;
 	}
-	else if (lexing_comment && c == '\n' || c == EndOfInputStream) {
-		YieldToken(origin, len - 1, token, TokenType::Comment);
-		m_Mode = LexMode::Default;
+	else if(c == sliteral_terminator) {
+		bool escaped = static_cast<bool>(backslash_count % 2);
+		backslash_count = 0;
+		
+		if(!escaped) {
+			YieldToken(origin, len, token, TokenType::String_Literal);
+			m_Mode = LexMode::Default;
+		}
+	}
+	else if(c == '\\') {
+		backslash_count++;
+	}
+	else {
+		backslash_count = 0;
 	}
 }
 
 void Lexer::NumericLexingPath(Token& token, const std::uint8_t c,
-	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix,
-	bool& lexing_comment)
+	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix)
 {
 	if (!IsNumericSymbol(c)) {
 		YieldToken(origin, len, token, TokenType::Number_Literal);
@@ -140,7 +146,7 @@ Token Lexer::NextToken() {
 	std::size_t origin = m_ReadIdx;
 	std::size_t len = 0;
 
-	bool lexing_comment = false;
+	std::size_t backslash_count = 0;
 	std::uint8_t StringLiteralPrefix = NULL;
 	bool InputStreamWasRead = false;
 	std::uint8_t c = NULL;
@@ -152,15 +158,15 @@ Token Lexer::NextToken() {
 
 		switch (m_Mode) {
 			case LexMode::Default:
-				DefaultLexingPath(token, c, origin, len, StringLiteralPrefix, lexing_comment);
+				DefaultLexingPath(token, c, origin, len, StringLiteralPrefix);
 				break;
 
 			case LexMode::String:
-				StringLexingPath(token, c, origin, len, StringLiteralPrefix, lexing_comment);
+				StringLexingPath(token, c, origin, len, StringLiteralPrefix, backslash_count);
 				break;
 
 			case LexMode::Numeric:
-				NumericLexingPath(token, c, origin, len, StringLiteralPrefix, lexing_comment);
+				NumericLexingPath(token, c, origin, len, StringLiteralPrefix);
 				break;
 		}
 	}
