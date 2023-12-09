@@ -7,9 +7,9 @@
 
 enum class LexMode {
 	Default,
-	String,
-	Numeric,
-	Preprocessor_Directive
+	String_Literal,
+	Number_Literal,
+	Preprocessor_Directive,
 };
 
 enum class TokenType {
@@ -20,6 +20,7 @@ enum class TokenType {
 	Operator,
 	Seperator,
 	String_Literal,
+	Char_Literal,
 	Number_Literal,
 	Preprocessor,
 	Comment

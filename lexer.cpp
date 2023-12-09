@@ -2,8 +2,6 @@
 #include <iostream>
 
 // @add: support for single-line & multi-line comments.
-// @add: distinguish string vs. char literal (w/ char literal being one char).
-// @cleanup: make preproc path work with default path so strings and identifies get handled naturally.
 
 const char* Preprocessor_Keywords[] = {
 	"#define", "#elif", "#else",
@@ -75,13 +73,13 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 		m_Mode = LexMode::Preprocessor_Directive;
 		len++;
 	}
-	else if (c == '\"' || c == '\'' || (last_token_was_preproc && c == '<')) {
+	else if (c == '\'' || c == '\"' || (last_token_was_preproc && c == '<')) {
 		if (len) {
 			YieldToken(origin, len, token);
 			RewindInputStream();
 		}
 		else {
-			m_Mode = LexMode::String;
+			m_Mode = LexMode::String_Literal;
 			sliteral_terminator = (c == '<') ? '>' : c;
 			len++;
 		}
@@ -97,7 +95,7 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 		}
 	}
 	else if (std::isdigit(c) && !len) {
-		m_Mode = LexMode::Numeric;
+		m_Mode = LexMode::Number_Literal;
 		len++;
 	}
 	else if (c == EndOfInputStream && len) {
@@ -115,7 +113,8 @@ void Lexer::LexStringLiteral(Token& token, const std::uint8_t c,
 	len++;
 	
 	if(c == EndOfInputStream) {
-		YieldToken(origin, len - 1, token, TokenType::String_Literal);
+		auto type = (sliteral_terminator == '\'') ? TokenType::Char_Literal : TokenType::String_Literal; 
+		YieldToken(origin, len - 1, token, type);
 		m_Mode = LexMode::Default;
 		return;
 	}
@@ -124,7 +123,8 @@ void Lexer::LexStringLiteral(Token& token, const std::uint8_t c,
 		backslash_count = 0;
 		
 		if(!escaped) {
-			YieldToken(origin, len, token, TokenType::String_Literal);
+			auto type = (sliteral_terminator == '\'') ? TokenType::Char_Literal : TokenType::String_Literal; 
+			YieldToken(origin, len, token, type);
 			m_Mode = LexMode::Default;
 		}
 	}
@@ -182,11 +182,11 @@ Token Lexer::NextToken() {
 				DefaultLexingPath(token, c, origin, len, sliteral_terminator, preprocessor_directive);
 				break;
 
-			case LexMode::String:
+			case LexMode::String_Literal:
 				LexStringLiteral(token, c, origin, len, sliteral_terminator, backslash_count);
 				break;
 
-			case LexMode::Numeric:
+			case LexMode::Number_Literal:
 				LexNumberLiteral(token, c, origin, len, sliteral_terminator);
 				break;
 				
