@@ -8,7 +8,8 @@
 enum class LexMode {
 	Default,
 	String,
-	Numeric
+	Numeric,
+	Preprocessor_Directive
 };
 
 enum class TokenType {
@@ -20,6 +21,7 @@ enum class TokenType {
 	Seperator,
 	String_Literal,
 	Number_Literal,
+	Preprocessor,
 	Comment
 };
 
@@ -43,13 +45,16 @@ private:
 	LexMode m_Mode;
 
 	void DefaultLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len, 
-		std::uint8_t& StringLiteralPrefix);
+		std::uint8_t& sliteral_terminator, bool& preprocessor_directive);
 
-	void StringLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
-		std::uint8_t& StringLiteralPrefix, std::size_t& backslash_count);
+	void LexStringLiteral(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
+		std::uint8_t& sliteral_terminator, std::size_t& backslash_count);
 
-	void NumericLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
-		std::uint8_t& StringLiteralPrefix);
+	void LexNumberLiteral(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
+		std::uint8_t& sliteral_terminator);
+
+	void LexPreprocessorDirective(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
+		std::uint8_t& sliteral_terminator);
 
 	bool ConsumeFromInputStream(std::uint8_t& c);
 	
@@ -60,7 +65,7 @@ private:
 	void YieldToken(const std::size_t origin, const std::size_t len,
 		Token& token, TokenType type = TokenType::Invalid);
 
-	bool IsOperator(const std::uint8_t c);
+	bool IsMathSymbol(const std::uint8_t c);
 
 	[[nodiscard]] Token NextToken();
 public:

@@ -21,13 +21,13 @@ void PrintError(const std::string err_msg) {
 
 const std::unordered_map<TokenType, Colour> ColourMap = {
 	{TokenType::Identifier,		Colour::Default},
-	{TokenType::Keyword,		Colour::Yellow},
-	{TokenType::Datatype,		Colour::Red},
+	{TokenType::Keyword,		Colour::Red},
+	{TokenType::Datatype,		Colour::Blue},
 	{TokenType::Operator,		Colour::Yellow},
 	{TokenType::Seperator,		Colour::Blue},
-	{TokenType::String_Literal, Colour::Green},
 	{TokenType::Number_Literal, Colour::Magenta},
-	{TokenType::Comment,		Colour::Red}
+	{TokenType::String_Literal, Colour::Green},
+	{TokenType::Preprocessor, Colour::Magenta},
 };
 
 void Highlight(const std::string& blob) {

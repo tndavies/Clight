@@ -1,8 +1,8 @@
 #include <lexer.hpp>
 #include <iostream>
 
-// @feature: add support for preprocessor directives 
 // @feature: add support for single-line & multi-line comments.
+// @todo: compress all lexer boolean flags into a bitfield w/ helper funcs.
 
 const char* Preprocessor_Keywords[] = {
 	"#define", "#elif", "#else",
@@ -61,11 +61,16 @@ void Lexer::LexBlob() {
 }
 
 void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c, 
-	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix)
+	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator,
+	bool& preprocessor_directive)
 {
 	if (std::isspace(c)) {
 		if (len) YieldToken(origin, len, token);
 		else token = NextToken();
+	}
+	else if(c == '#') {
+		m_Mode = LexMode::Preprocessor_Directive;
+		len++;
 	}
 	else if (c == '\"' || c == '\'') {
 		if (len) {
@@ -74,7 +79,7 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 		}
 		else {
 			m_Mode = LexMode::String;
-			StringLiteralPrefix = c;
+			sliteral_terminator = c;
 			len++;
 		}
 	}
@@ -84,7 +89,7 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 			RewindInputStream();
 		}
 		else {
-			auto type = IsOperator(c) ? TokenType::Operator : TokenType::Seperator;
+			auto type = IsMathSymbol(c) ? TokenType::Operator : TokenType::Seperator;
 			YieldToken(origin, 1, token, type);
 		}
 	}
@@ -100,7 +105,7 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 	}
 }
 
-void Lexer::StringLexingPath(Token& token, const std::uint8_t c,
+void Lexer::LexStringLiteral(Token& token, const std::uint8_t c,
 	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator,
 	std::size_t& backslash_count)
 {
@@ -128,8 +133,8 @@ void Lexer::StringLexingPath(Token& token, const std::uint8_t c,
 	}
 }
 
-void Lexer::NumericLexingPath(Token& token, const std::uint8_t c,
-	const std::size_t origin, std::size_t& len, std::uint8_t& StringLiteralPrefix)
+void Lexer::LexNumberLiteral(Token& token, const std::uint8_t c,
+	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator)
 {
 	if (!IsNumericSymbol(c)) {
 		YieldToken(origin, len, token, TokenType::Number_Literal);
@@ -141,16 +146,34 @@ void Lexer::NumericLexingPath(Token& token, const std::uint8_t c,
 	}
 }
 
+void Lexer::LexPreprocessorDirective(Token& token, const std::uint8_t c, const std::size_t origin, 
+	std::size_t& len, std::uint8_t& sliteral_terminator)
+{
+	len++;
+			
+	if(std::isspace(c)) {
+		YieldToken(origin, len - 1, token, TokenType::Preprocessor);
+	
+		if(c == '\n') m_Mode = LexMode::Default;
+	}
+	else if(c == '<' || c == '\"') {
+		sliteral_terminator = (c == '<') ? '>' : '\"';
+		m_Mode = LexMode::String;
+	}
+}
+
 Token Lexer::NextToken() {
 	Token token = { .type = TokenType::Invalid };
 	std::size_t origin = m_ReadIdx;
 	std::size_t len = 0;
 
 	std::size_t backslash_count = 0;
-	std::uint8_t StringLiteralPrefix = NULL;
-	bool InputStreamWasRead = false;
+	bool preprocessor_directive = false;
+	std::uint8_t sliteral_terminator = NULL;
+	
 	std::uint8_t c = NULL;
-
+	bool InputStreamWasRead = false;
+	
 	while (token.type == TokenType::Invalid && 
 		(InputStreamWasRead = ConsumeFromInputStream(c)) )
 	{
@@ -158,15 +181,20 @@ Token Lexer::NextToken() {
 
 		switch (m_Mode) {
 			case LexMode::Default:
-				DefaultLexingPath(token, c, origin, len, StringLiteralPrefix);
+				DefaultLexingPath(token, c, origin, len, sliteral_terminator, preprocessor_directive);
 				break;
 
 			case LexMode::String:
-				StringLexingPath(token, c, origin, len, StringLiteralPrefix, backslash_count);
+				LexStringLiteral(token, c, origin, len, sliteral_terminator, backslash_count);
 				break;
 
 			case LexMode::Numeric:
-				NumericLexingPath(token, c, origin, len, StringLiteralPrefix);
+				LexNumberLiteral(token, c, origin, len, sliteral_terminator);
+				break;
+				
+			case LexMode::Preprocessor_Directive:
+				LexPreprocessorDirective(token, c, origin, len, sliteral_terminator);
+				
 				break;
 		}
 	}
@@ -219,6 +247,7 @@ bool Lexer::IsNumericSymbol(std::uint8_t c) {
 	return std::isdigit(c) || c == '.' || c == 'e' || c == '-';
 }
 
-bool Lexer::IsOperator(const std::uint8_t c) {
-	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '=' || c == '!';
+bool Lexer::IsMathSymbol(const std::uint8_t c) {
+	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' 
+		|| c == '=' || c == '!' || c == '<' || c == '>';
 }
