@@ -1,8 +1,9 @@
 #include <lexer.hpp>
 #include <iostream>
 
-// @feature: add support for single-line & multi-line comments.
-// @todo: compress all lexer boolean flags into a bitfield w/ helper funcs.
+// @add: support for single-line & multi-line comments.
+// @add: distinguish string vs. char literal (w/ char literal being one char).
+// @cleanup: make preproc path work with default path so strings and identifies get handled naturally.
 
 const char* Preprocessor_Keywords[] = {
 	"#define", "#elif", "#else",
@@ -64,6 +65,8 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator,
 	bool& preprocessor_directive)
 {
+	bool last_token_was_preproc = m_Tokens.size() ? (m_Tokens.back().type == TokenType::Preprocessor) : false; 
+	
 	if (std::isspace(c)) {
 		if (len) YieldToken(origin, len, token);
 		else token = NextToken();
@@ -72,14 +75,14 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 		m_Mode = LexMode::Preprocessor_Directive;
 		len++;
 	}
-	else if (c == '\"' || c == '\'') {
+	else if (c == '\"' || c == '\'' || (last_token_was_preproc && c == '<')) {
 		if (len) {
 			YieldToken(origin, len, token);
 			RewindInputStream();
 		}
 		else {
 			m_Mode = LexMode::String;
-			sliteral_terminator = c;
+			sliteral_terminator = (c == '<') ? '>' : c;
 			len++;
 		}
 	}
@@ -153,12 +156,7 @@ void Lexer::LexPreprocessorDirective(Token& token, const std::uint8_t c, const s
 			
 	if(std::isspace(c)) {
 		YieldToken(origin, len - 1, token, TokenType::Preprocessor);
-	
-		if(c == '\n') m_Mode = LexMode::Default;
-	}
-	else if(c == '<' || c == '\"') {
-		sliteral_terminator = (c == '<') ? '>' : '\"';
-		m_Mode = LexMode::String;
+		m_Mode = LexMode::Default;
 	}
 }
 
