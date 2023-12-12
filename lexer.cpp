@@ -1,9 +1,7 @@
 #include <lexer.hpp>
 #include <iostream>
 
-// @fix: nexted multiline comments are broken.
-
-const char* Preprocessor_Keywords[] = {
+const std::vector<const char*> Preprocessor_Keywords = {
 	"#define", "#elif", "#else",
 	"#endif", "#error", "#if",
 	"#ifdef", "#ifndef", "#import",
@@ -11,7 +9,7 @@ const char* Preprocessor_Keywords[] = {
 	"#undef", "#using"
 };
 
-const char* DataType_Keywords[] = {
+const std::vector<const char*> DataType_Keywords = {
 	"auto", "bool", "char", "size_t",
 	"uint8_t", "uint16_t", "uint32_t",
 	"int8_t", "int16_t", "int32_t",
@@ -21,7 +19,7 @@ const char* DataType_Keywords[] = {
 	"wchar_t"
 };
 
-const char* Language_Keywords[] = {
+const std::vector<const char*> Language_Keywords = {
 	"alignas", "alignof", "and", "and_eq", "asm",
 	"atomic_cancel", "atomic_commit", "atomic_noexcept",
 	"bitand", "bitor", "break", "case", "catch",
@@ -56,7 +54,7 @@ void Lexer::LexBlob() {
 	}
 
 	auto t1 = std::chrono::steady_clock::now();
-	m_ElapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+	m_ElapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
 }
 
 void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c, 
@@ -67,10 +65,6 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 	if (std::isspace(c)) {
 		if (len) YieldToken(origin, len, token);
 		else token = NextToken();
-	}
-	else if(c == '#') {
-		m_Mode = LexMode::Preprocessor_Directive;
-		len++;
 	}
 	// @note: EndOfInputStream prevents possible read access violation here.
 	else if(c == '/' && m_Blob[m_ReadIdx] == '/') {
@@ -93,7 +87,7 @@ void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c,
 			len++;
 		}
 	}
-	else if (std::ispunct(c) && c != '_') {
+	else if (std::ispunct(c) && c != '_' && c != '#') {
 		if (len) {
 			YieldToken(origin, len, token);
 			RewindInputStream();
@@ -158,17 +152,6 @@ void Lexer::LexNumberLiteral(Token& token, const std::uint8_t c,
 	}
 }
 
-void Lexer::LexPreprocessorDirective(Token& token, const std::uint8_t c, const std::size_t origin, 
-	std::size_t& len, std::uint8_t& sliteral_terminator)
-{
-	len++;
-			
-	if(std::isspace(c)) {
-		YieldToken(origin, len - 1, token, TokenType::Preprocessor);
-		m_Mode = LexMode::Default;
-	}
-}
-
 Token Lexer::NextToken() {
 	Token token = { .type = TokenType::Invalid };
 	std::size_t origin = m_ReadIdx;
@@ -198,10 +181,6 @@ Token Lexer::NextToken() {
 				LexNumberLiteral(token, c, origin, len, sliteral_terminator);
 				break;
 				
-			case LexMode::Preprocessor_Directive:
-				LexPreprocessorDirective(token, c, origin, len, sliteral_terminator);
-				break;
-				
 			case LexMode::SingleLineComment:
 				len++;
 				
@@ -215,9 +194,11 @@ Token Lexer::NextToken() {
 			case LexMode::MultiLineComment:
 				len++;
 				
+				//
 				// @note: there is no risk of an access violation here, as we
 				// require a /* to appear in the blob first, before we run
 				// this codepath.
+				//
 				if(c == EndOfInputStream || c == '/' && m_Blob[m_ReadIdx-2] == '*') {
 					YieldToken(origin, len, token, TokenType::Comment);
 					m_Mode = LexMode::Default;
@@ -230,30 +211,41 @@ Token Lexer::NextToken() {
 	return token;
 }
 
-TokenType Lexer::MatchKeyword(const std::size_t origin, const std::size_t len) {
-	std::string token = m_Blob.substr(origin, len);
-
-	for (auto kw : Language_Keywords) {
-		if (token.compare(kw) == 0) {
-			return TokenType::Keyword;
+bool Lexer::MatchToken(const std::vector<const char*>& dict, const std::size_t origin, const std::size_t len)
+{
+	std::string token_string = m_Blob.substr(origin, len);
+	for (auto kw: dict) {
+		if (token_string.compare(kw) == 0) {
+			return true;
 		}
 	}
-
-	for (auto kw : DataType_Keywords) {
-		if (token.compare(kw) == 0) {
-			return TokenType::Datatype;
-		}
-	}
-
-	return TokenType::Identifier;
+	
+	return false;
 }
 
 void Lexer::YieldToken(const std::size_t origin, const std::size_t len,
-	Token& token, TokenType type) 
+	Token& token, TokenType type)
 {
 	token.idx = origin;
 	token.len = len;
-	token.type = (type == TokenType::Invalid) ? MatchKeyword(origin, len) : type;
+	token.type = type;
+
+	bool last_token_was_preproc = m_Tokens.size() ? (m_Tokens.back().type == TokenType::Preprocessor) : false; 
+	std::string token_str = m_Blob.substr(origin, len);
+	if(token_str.compare("once") == 0 && last_token_was_preproc) {
+		token.type = TokenType::Preprocessor;
+	}
+	
+	if(token.type == TokenType::Invalid) {
+		bool is_keyword = MatchToken(Language_Keywords, origin, len);
+		bool is_datatype = MatchToken(DataType_Keywords, origin, len);
+		bool is_preproc = MatchToken(Preprocessor_Keywords, origin, len);
+
+		if(is_keyword) 			token.type = TokenType::Keyword;
+		else if(is_datatype) 	token.type = TokenType::Datatype;
+		else if(is_preproc) 	token.type = TokenType::Preprocessor;
+		else 					token.type = TokenType::Identifier;
+	}
 }
 
 bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {
@@ -271,11 +263,12 @@ bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {
 	}
 }
 
-bool Lexer::IsNumericSymbol(std::uint8_t c) {
-	return std::isdigit(c) || c == '.' || c == 'e' || c == '-';
+bool Lexer::IsNumericSymbol(const std::uint8_t c) {
+	return std::isdigit(c) || std::isxdigit(c) || c == '.' || c == 'e' || c == '-' || c == 'x';
 }
 
 bool Lexer::IsMathSymbol(const std::uint8_t c) {
 	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' 
-		|| c == '=' || c == '!' || c == '<' || c == '>';
+		|| c == '=' || c == '!' || c == '<' || c == '>' || c == '~'
+		|| c == '&' || c == '|';
 }

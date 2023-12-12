@@ -9,13 +9,13 @@ enum class LexMode {
 	Default,
 	String_Literal,
 	Number_Literal,
-	Preprocessor_Directive,
 	SingleLineComment,
 	MultiLineComment
 };
 
 enum class TokenType {
 	Invalid,
+	
 	Keyword,
 	Datatype,
 	Identifier,
@@ -41,7 +41,7 @@ struct Token {
 class Lexer {
 
 private:
-	std::chrono::microseconds m_ElapsedTime;
+	std::chrono::milliseconds m_ElapsedTime;
 	std::vector<Token> m_Tokens;
 	const std::string m_Blob;
 	std::size_t m_ReadIdx;
@@ -56,15 +56,12 @@ private:
 	void LexNumberLiteral(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
 		std::uint8_t& sliteral_terminator);
 
-	void LexPreprocessorDirective(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
-		std::uint8_t& sliteral_terminator);
-
 	bool ConsumeFromInputStream(std::uint8_t& c);
 	
-	bool IsNumericSymbol(std::uint8_t c);
+	bool IsNumericSymbol(const std::uint8_t c);
 	
-	TokenType MatchKeyword(const std::size_t origin, const std::size_t len);
-	
+	bool MatchToken(const std::vector<const char*>& dict, const std::size_t origin, const std::size_t len);
+
 	void YieldToken(const std::size_t origin, const std::size_t len,
 		Token& token, TokenType type = TokenType::Invalid);
 

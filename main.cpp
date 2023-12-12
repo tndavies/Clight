@@ -24,12 +24,12 @@ const std::unordered_map<TokenType, Colour> ColourMap = {
 	{TokenType::Keyword,		Colour::Red},
 	{TokenType::Datatype,		Colour::Blue},
 	{TokenType::Operator,		Colour::Yellow},
-	{TokenType::Seperator,		Colour::Blue},
+	{TokenType::Seperator,		Colour::Red},
 	{TokenType::Number_Literal, Colour::Magenta},
 	{TokenType::String_Literal, Colour::Green},
 	{TokenType::Char_Literal,	Colour::Black},
 	{TokenType::Preprocessor,	Colour::Magenta},
-	{TokenType::Comment,		Colour::Black}
+	{TokenType::Comment,		Colour::Yellow}
 };
 
 void Highlight(const std::string& blob) {
