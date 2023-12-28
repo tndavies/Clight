@@ -1,5 +1,4 @@
 #include <lexer.hpp>
-#include <iostream>
 
 const std::vector<const char*> Preprocessor_Keywords = {
 	"#define", "#elif", "#else",
@@ -10,7 +9,7 @@ const std::vector<const char*> Preprocessor_Keywords = {
 };
 
 const std::vector<const char*> DataType_Keywords = {
-	"auto", "bool", "char", "size_t",
+	"bool", "char", "size_t",
 	"uint8_t", "uint16_t", "uint32_t",
 	"int8_t", "int16_t", "int32_t",
 	"double", "float", "enum", 
@@ -20,7 +19,7 @@ const std::vector<const char*> DataType_Keywords = {
 };
 
 const std::vector<const char*> Language_Keywords = {
-	"alignas", "alignof", "and", "and_eq", "asm",
+	"auto", "alignas", "alignof", "and", "and_eq", "asm",
 	"atomic_cancel", "atomic_commit", "atomic_noexcept",
 	"bitand", "bitor", "break", "case", "catch",
 	"class", "compl", "concept",
@@ -38,131 +37,22 @@ const std::vector<const char*> Language_Keywords = {
 	"while", "xor", "xor_eq"
 };
 
-Lexer::Lexer(const char* blob, bool defer_lex)
-	: m_ReadIdx(0), m_Blob(blob), m_Mode(LexMode::Default) , m_ElapsedTime(0)
-{
-	if(!defer_lex) 
-		LexBlob();
-}
-
-void Lexer::LexBlob() {
-	auto t0 = std::chrono::steady_clock::now();
-
+void Highlighter::Parse() {
 	Token token;
 	while (token = NextToken()) {
 		m_Tokens.push_back(token);
 	}
-
-	auto t1 = std::chrono::steady_clock::now();
-	m_ElapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
 }
 
-void Lexer::DefaultLexingPath(Token& token, const std::uint8_t c, 
-	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator)
-{
-	bool last_token_was_preproc = m_Tokens.size() ? (m_Tokens.back().type == TokenType::Preprocessor) : false; 
-	
-	if (std::isspace(c)) {
-		if (len) YieldToken(origin, len, token);
-		else token = NextToken();
-	}
-	// @note: EndOfInputStream prevents possible read access violation here.
-	else if(c == '/' && m_Blob[m_ReadIdx] == '/') {
-		m_Mode = LexMode::SingleLineComment;
-		len++;
-	}
-	// @note: EndOfInputStream prevents possible read access violation here.
-	else if(c == '/' && m_Blob[m_ReadIdx] == '*') {
-		m_Mode = LexMode::MultiLineComment;
-		len++;
-	}
-	else if (c == '\'' || c == '\"' || (last_token_was_preproc && c == '<')) {
-		if (len) {
-			YieldToken(origin, len, token);
-			RewindInputStream();
-		}
-		else {
-			m_Mode = LexMode::String_Literal;
-			sliteral_terminator = (c == '<') ? '>' : c;
-			len++;
-		}
-	}
-	else if (std::ispunct(c) && c != '_' && c != '#') {
-		if (len) {
-			YieldToken(origin, len, token);
-			RewindInputStream();
-		}
-		else {
-			auto type = IsMathSymbol(c) ? TokenType::Operator : TokenType::Seperator;
-			YieldToken(origin, 1, token, type);
-		}
-	}
-	else if (std::isdigit(c) && !len) {
-		m_Mode = LexMode::Number_Literal;
-		len++;
-	}
-	else if (c == EndOfInputStream && len) {
-		YieldToken(origin, len, token);
-	}
-	else {
-		len++;
-	}
-}
-
-void Lexer::LexStringLiteral(Token& token, const std::uint8_t c,
-	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator,
-	std::size_t& backslash_count)
-{
-	len++;
-	
-	if(c == EndOfInputStream) {
-		auto type = (sliteral_terminator == '\'') ? TokenType::Char_Literal : TokenType::String_Literal; 
-		YieldToken(origin, len - 1, token, type);
-		m_Mode = LexMode::Default;
-		return;
-	}
-	else if(c == sliteral_terminator) {
-		bool escaped = static_cast<bool>(backslash_count % 2);
-		backslash_count = 0;
-		
-		if(!escaped) {
-			auto type = (sliteral_terminator == '\'') ? TokenType::Char_Literal : TokenType::String_Literal; 
-			YieldToken(origin, len, token, type);
-			m_Mode = LexMode::Default;
-		}
-	}
-	else if(c == '\\') {
-		backslash_count++;
-	}
-	else {
-		backslash_count = 0;
-	}
-}
-
-void Lexer::LexNumberLiteral(Token& token, const std::uint8_t c,
-	const std::size_t origin, std::size_t& len, std::uint8_t& sliteral_terminator)
-{
-	if (!IsNumericSymbol(c)) {
-		YieldToken(origin, len, token, TokenType::Number_Literal);
-		m_Mode = LexMode::Default;
-		RewindInputStream();
-	}
-	else {
-		len++;
-	}
-}
-
-Token Lexer::NextToken() {
-	Token token = { .type = TokenType::Invalid };
-	std::size_t origin = m_ReadIdx;
-	std::size_t len = 0;
+Token Highlighter::NextToken() {
+	Token token = { TokenType::Invalid , m_ReadIdx, 0 };
 
 	std::size_t backslash_count = 0;
-	std::uint8_t sliteral_terminator = NULL;
+	std::uint8_t string_terminator = NULL;
 	
 	std::uint8_t c = NULL;
 	bool InputStreamWasRead = false;
-	
+
 	while (token.type == TokenType::Invalid && 
 		(InputStreamWasRead = ConsumeFromInputStream(c)) )
 	{
@@ -170,40 +60,23 @@ Token Lexer::NextToken() {
 
 		switch (m_Mode) {
 			case LexMode::Default:
-				DefaultLexingPath(token, c, origin, len, sliteral_terminator);
+				DefaultMode(token, c, string_terminator);
 				break;
 
 			case LexMode::String_Literal:
-				LexStringLiteral(token, c, origin, len, sliteral_terminator, backslash_count);
+				StringLiteralMode(token, c, string_terminator, backslash_count);
 				break;
 
 			case LexMode::Number_Literal:
-				LexNumberLiteral(token, c, origin, len, sliteral_terminator);
+				NumberLiteralMode(token, c, string_terminator);
 				break;
 				
 			case LexMode::SingleLineComment:
-				len++;
-				
-				if(c == EndOfInputStream || c == '\n') {
-					YieldToken(origin, len - 1, token, TokenType::Comment);
-					m_Mode = LexMode::Default;
-				}
-				
+				SingleCommentMode(token, c);
 				break;
 				
 			case LexMode::MultiLineComment:
-				len++;
-				
-				//
-				// @note: there is no risk of an access violation here, as we
-				// require a /* to appear in the blob first, before we run
-				// this codepath.
-				//
-				if(c == EndOfInputStream || c == '/' && m_Blob[m_ReadIdx-2] == '*') {
-					YieldToken(origin, len, token, TokenType::Comment);
-					m_Mode = LexMode::Default;
-				}
-				
+				MultiCommentMode(token, c);
 				break;
 		}
 	}
@@ -211,44 +84,153 @@ Token Lexer::NextToken() {
 	return token;
 }
 
-bool Lexer::MatchToken(const std::vector<const char*>& dict, const std::size_t origin, const std::size_t len)
-{
-	std::string token_string = m_Blob.substr(origin, len);
-	for (auto kw: dict) {
-		if (token_string.compare(kw) == 0) {
-			return true;
+void Highlighter::DefaultMode(Token& token, const std::uint8_t c, std::uint8_t& string_terminator) {
+	bool last_token_was_preproc = m_Tokens.size() ? (m_Tokens.back().type == TokenType::Preprocessor) : false;
+
+	if (std::isspace(c)) {
+		if (token.len) InferTokenType(token);
+		else token = NextToken();
+	}
+	// Note: EndOfInputStream prevents possible read access violation here.
+	else if (c == '/' && m_Blob[m_ReadIdx] == '/') {
+		m_Mode = LexMode::SingleLineComment;
+		token.len++;
+	}
+	// Note: EndOfInputStream prevents possible read access violation here.
+	else if (c == '/' && m_Blob[m_ReadIdx] == '*') {
+		m_Mode = LexMode::MultiLineComment;
+		token.len++;
+	}
+	else if (c == '\'' || c == '\"' || (last_token_was_preproc && c == '<')) {
+		if (token.len) {
+			InferTokenType(token);
+			RewindInputStream();
+		}
+		else {
+			m_Mode = LexMode::String_Literal;
+			string_terminator = (c == '<') ? '>' : c;
+			token.len++;
 		}
 	}
-	
-	return false;
+	else if (std::ispunct(c) && c != '_' && c != '#') {
+		if (token.len) {
+			InferTokenType(token);
+			RewindInputStream();
+		}
+		else {
+			auto type = IsMathSymbol(c) ? TokenType::Operator : TokenType::Seperator;
+			InferTokenType(token, type);
+		}
+	}
+	else if (std::isdigit(c) && !token.len) {
+		m_Mode = LexMode::Number_Literal;
+		token.len++;
+	}
+	else if (c == EndOfInputStream && token.len) {
+		InferTokenType(token);
+	}
+	else {
+		token.len++;
+	}
 }
 
-void Lexer::YieldToken(const std::size_t origin, const std::size_t len,
-	Token& token, TokenType type)
+void Highlighter::StringLiteralMode(Token& token, const std::uint8_t c, std::uint8_t& string_terminator, std::size_t& backslash_count) {
+	token.len++;
+
+	if (c == EndOfInputStream) {
+		token.len--;
+		
+		auto type = (string_terminator == '\'') ? TokenType::Char_Literal : TokenType::String_Literal;
+		InferTokenType(token, type);
+		
+		m_Mode = LexMode::Default;
+		
+		return;
+	}
+	else if (c == string_terminator) {
+		bool escaped = static_cast<bool>(backslash_count % 2);
+		backslash_count = 0;
+
+		if (!escaped) {
+			auto type = (string_terminator == '\'') ? TokenType::Char_Literal : TokenType::String_Literal;
+			InferTokenType(token, type);
+			m_Mode = LexMode::Default;
+		}
+	}
+	else if (c == '\\') {
+		backslash_count++;
+	}
+	else {
+		backslash_count = 0;
+	}
+}
+
+void Highlighter::NumberLiteralMode(Token& token, const std::uint8_t c, std::uint8_t& string_terminator) {
+	token.len++;
+
+	if (!IsNumericSymbol(c)) {
+		token.len--;
+		InferTokenType(token, TokenType::Number_Literal);
+
+		m_Mode = LexMode::Default;
+
+		RewindInputStream();
+	}
+}
+
+void Highlighter::SingleCommentMode(Token& token, const std::uint8_t c) {
+	token.len++;
+
+	if (c == EndOfInputStream || c == '\n') {
+		token.len--;
+
+		InferTokenType(token, TokenType::Comment);
+		
+		m_Mode = LexMode::Default;
+	}
+}
+
+void Highlighter::MultiCommentMode(Token& token, const std::uint8_t c) {
+	token.len++;
+
+	// Note: the index into the blob is guarenteed to be safe here as this path
+	// only runs once we detect a '/*'. 
+	if (c == EndOfInputStream || c == '/' && m_Blob[m_ReadIdx - 2] == '*') {
+		InferTokenType(token, TokenType::Comment);
+		m_Mode = LexMode::Default;
+	}
+}
+
+void Highlighter::InferTokenType(Token& token, TokenType type)
 {
-	token.idx = origin;
-	token.len = len;
+	auto origin = token.origin;
+	auto len = token.len;
 	token.type = type;
-
-	bool last_token_was_preproc = m_Tokens.size() ? (m_Tokens.back().type == TokenType::Preprocessor) : false; 
-	std::string token_str = m_Blob.substr(origin, len);
-	if(token_str.compare("once") == 0 && last_token_was_preproc) {
-		token.type = TokenType::Preprocessor;
-	}
 	
-	if(token.type == TokenType::Invalid) {
-		bool is_keyword = MatchToken(Language_Keywords, origin, len);
-		bool is_datatype = MatchToken(DataType_Keywords, origin, len);
-		bool is_preproc = MatchToken(Preprocessor_Keywords, origin, len);
+	if(type == TokenType::Invalid) {
+		bool last_token_was_preproc = m_Tokens.size() ? (m_Tokens.back().type == TokenType::Preprocessor) : false;
+		bool token_is_once = (m_Blob.substr(origin, len).compare("once") == 0);
 
-		if(is_keyword) 			token.type = TokenType::Keyword;
-		else if(is_datatype) 	token.type = TokenType::Datatype;
-		else if(is_preproc) 	token.type = TokenType::Preprocessor;
-		else 					token.type = TokenType::Identifier;
+		// Note: Special case to highlight 'once' correctly in preprocessor directives.
+		if (token_is_once && last_token_was_preproc) {
+			token.type = TokenType::Preprocessor;
+		}
+		else {
+			std::string token_string = m_Blob.substr(origin, len);
+
+			bool is_keyword = AppearsIn(Language_Keywords, token_string);
+			bool is_datatype = AppearsIn(DataType_Keywords, token_string);
+			bool is_preproc = AppearsIn(Preprocessor_Keywords, token_string);
+
+			if (is_keyword) 			token.type = TokenType::Keyword;
+			else if (is_datatype) 	token.type = TokenType::Datatype;
+			else if (is_preproc) 	token.type = TokenType::Preprocessor;
+			else 					token.type = TokenType::Identifier;
+		}
 	}
 }
 
-bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {
+bool Highlighter::ConsumeFromInputStream(std::uint8_t& c) {
 	if (m_ReadIdx < m_Blob.length()) {
 		c = m_Blob[m_ReadIdx++];
 		return true;
@@ -263,12 +245,23 @@ bool Lexer::ConsumeFromInputStream(std::uint8_t& c) {
 	}
 }
 
-bool Lexer::IsNumericSymbol(const std::uint8_t c) {
-	return std::isdigit(c) || std::isxdigit(c) || c == '.' || c == 'e' || c == '-' || c == 'x';
+bool Highlighter::AppearsIn(const std::vector<const char*>& dict, const std::string& string)
+{
+	for (auto kw : dict) {
+		if (string.compare(kw) == 0) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
-bool Lexer::IsMathSymbol(const std::uint8_t c) {
-	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' 
+bool Highlighter::IsMathSymbol(const std::uint8_t c) {
+	return c == '+' || c == '-' || c == '*' || c == '/' || c == '%'
 		|| c == '=' || c == '!' || c == '<' || c == '>' || c == '~'
 		|| c == '&' || c == '|';
+}
+
+bool Highlighter::IsNumericSymbol(const std::uint8_t c) {
+	return std::isdigit(c) || std::isxdigit(c) || c == '.' || c == 'e' || c == '-' || c == 'x';
 }

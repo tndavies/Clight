@@ -21,39 +21,39 @@ void PrintError(const std::string err_msg) {
 
 const std::unordered_map<TokenType, Colour> ColourMap = {
 	{TokenType::Identifier,		Colour::Default},
-	{TokenType::Keyword,		Colour::Red},
-	{TokenType::Datatype,		Colour::Blue},
-	{TokenType::Operator,		Colour::Yellow},
-	{TokenType::Seperator,		Colour::Red},
-	{TokenType::Number_Literal, Colour::Magenta},
-	{TokenType::String_Literal, Colour::Green},
-	{TokenType::Char_Literal,	Colour::Black},
+	{TokenType::Seperator,		Colour::Default},
+	
 	{TokenType::Preprocessor,	Colour::Magenta},
-	{TokenType::Comment,		Colour::Yellow}
+	{TokenType::Comment,		Colour::Yellow},
+
+	{TokenType::String_Literal, Colour::Yellow},
+	{TokenType::Number_Literal, Colour::Cyan},
+	{TokenType::Char_Literal,	Colour::Cyan},
+
+	{TokenType::Datatype,		Colour::Green},
+	{TokenType::Keyword,		Colour::Red},
+	{TokenType::Operator,		Colour::Blue}
 };
 
 void Highlight(const std::string& blob) {
-	Lexer lexer(blob.c_str());
+	Highlighter highlighter(blob.c_str());
+	highlighter.Parse();
 
 	size_t prev_token_end = 0;
-	const std::vector<Token>& tokens = lexer.getTokens();
-
-	std::cout << Palette::get(Colour::Red);
-	std::cout << "Performance: " << lexer.getElapsedTime() << "\n\n";
-	std::cout << Palette::get(Colour::Default);
+	const std::vector<Token>& tokens = highlighter.getTokens();
 
 	for (auto& token : tokens) {
-		if (prev_token_end != token.idx) {
-			for (size_t k = prev_token_end; k < token.idx; ++k) {
+		if (prev_token_end != token.origin) {
+			for (size_t k = prev_token_end; k < token.origin; ++k) {
 				std::cout << blob[k];
 			}
 		}
 
-		prev_token_end = token.idx + token.len;
+		prev_token_end = token.origin + token.len;
 
 		auto col = ColourMap.at(token.type);
 		std::cout << Palette::get(col);
-		std::cout << blob.substr(token.idx, token.len);
+		std::cout << blob.substr(token.origin, token.len);
 		std::cout << Palette::get(Colour::Default);
 	}
 }

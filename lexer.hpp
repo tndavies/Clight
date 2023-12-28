@@ -15,7 +15,6 @@ enum class LexMode {
 
 enum class TokenType {
 	Invalid,
-	
 	Keyword,
 	Datatype,
 	Identifier,
@@ -30,7 +29,7 @@ enum class TokenType {
 
 struct Token {
 	TokenType type;
-	size_t idx;
+	size_t origin;
 	size_t len;
 
 	// Tokens convert to true if they are valid,
@@ -38,40 +37,40 @@ struct Token {
 	operator bool() const { return (type != TokenType::Invalid); }
 };
 
-class Lexer {
-
-private:
-	std::chrono::milliseconds m_ElapsedTime;
-	std::vector<Token> m_Tokens;
-	const std::string m_Blob;
-	std::size_t m_ReadIdx;
-	LexMode m_Mode;
-
-	void DefaultLexingPath(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len, 
-		std::uint8_t& sliteral_terminator);
-
-	void LexStringLiteral(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
-		std::uint8_t& sliteral_terminator, std::size_t& backslash_count);
-
-	void LexNumberLiteral(Token& token, const std::uint8_t c, const std::size_t origin, std::size_t& len,
-		std::uint8_t& sliteral_terminator);
-
-	bool ConsumeFromInputStream(std::uint8_t& c);
-	
-	bool IsNumericSymbol(const std::uint8_t c);
-	
-	bool MatchToken(const std::vector<const char*>& dict, const std::size_t origin, const std::size_t len);
-
-	void YieldToken(const std::size_t origin, const std::size_t len,
-		Token& token, TokenType type = TokenType::Invalid);
-
-	bool IsMathSymbol(const std::uint8_t c);
-
-	[[nodiscard]] Token NextToken();
+class Highlighter {
 public:
-	Lexer(const char* blob, bool defer_lex = false);
-	auto getElapsedTime() const { return m_ElapsedTime; }
+	Highlighter(const char* blob, bool defer_lex = false)
+		: m_ReadIdx(0), m_Blob(blob), m_Mode(LexMode::Default) {}
+
+	/* Finds the next token within the blob */
+	[[nodiscard]] Token NextToken();
+
+	/* 
+		Finds all tokens within the blob, and puts them into a list; the 
+		list is accessible via the 'getToken' method. 
+	*/
+	void Parse();
+
+	/* Various Lexing Paths */
+	void DefaultMode(Token& token, const std::uint8_t c, std::uint8_t& string_terminator);
+	void StringLiteralMode(Token& token, const std::uint8_t c, std::uint8_t& string_terminator, std::size_t& backslash_count);
+	void NumberLiteralMode(Token& token, const std::uint8_t c, std::uint8_t& string_terminator);
+	void SingleCommentMode(Token& token, const std::uint8_t c);
+	void MultiCommentMode(Token& token, const std::uint8_t c);
+
+	/* Various Utility Functions */
+	bool ConsumeFromInputStream(std::uint8_t& c);
+	bool IsNumericSymbol(const std::uint8_t c);
+	bool AppearsIn(const std::vector<const char*>& dict, const std::string& string);
+	void InferTokenType(Token& token, TokenType type = TokenType::Invalid);
+	bool IsMathSymbol(const std::uint8_t c);
 	auto getBlobSize() const { return m_Blob.length(); }
 	const std::vector<Token>& getTokens() const { return m_Tokens; }
-	void LexBlob();
+
+private:
+	std::vector<Token> m_Tokens;
+	const std::string m_Blob;
+
+	std::size_t m_ReadIdx;
+	LexMode m_Mode;
 };
